@@ -1,6 +1,6 @@
 id: e7ab47ec-328a-412b-9b6b-df9b09f7c3bf
 name: Azure Storage Access Key Regenerated
-description: This alerts when Azure Storage access keys are regenerated. 
+description: This alerts when Azure Storage access keys are regenerated.
 severity: Medium
 requiredDataConnectors:  
   - connectorId: AzureActivity
