@@ -1,0 +1,32 @@
+id: e19fcd87-e1af-4b32-8ec3-ec5078de6fd1
+name: Azure Storage Key Enumeration
+description: Listing of storage keys is an interesting operation in Azure which might expose additional secrets and PII to callers as well as granting access to VMs. While there are many benign operations of this type, it would be interesting to see if the account performing this activity or the source IP address from which it is being done is anomalous. The query below generates known clusters of ip address per caller, notice that users which only had single operations do not appear in this list as we cannot learn from it their normal activity (only based on a single event). The activities for listing storage account keys is correlated with this learned clusters of expected activities and activity which is not expected is returned.
+severity: Medium
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Discovery
+query:
+let timeframe = 7d;
+AzureActivity
+| where TimeGenerated >= ago(timeframe)
+| where OperationName == "List Storage Account Keys"
+| where ActivityStatus == "Succeeded" 
+| join kind= inner (
+    AzureActivity
+    | where TimeGenerated >= ago(timeframe)
+    | where OperationName == "List Storage Account Keys"
+    | where ActivityStatus == "Succeeded" 
+    | project ExpectedIpAddress=CallerIpAddress, Caller 
+    | evaluate autocluster()
+    )
+    on Caller 
+| where CallerIpAddress != ExpectedIpAddress
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationName, Caller, CallerIpAddress
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
