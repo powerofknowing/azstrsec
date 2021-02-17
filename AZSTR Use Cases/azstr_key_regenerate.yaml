@@ -1,0 +1,29 @@
+id: e7ab47ec-328a-412b-9b6b-df9b09f7c3bf
+name: Azure Storage Access Key Regenerated
+description: This alerts when Azure Storage access keys are regenerated. 
+severity: Medium
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Initial Access
+query:
+let starttime = 7d;
+let alertOperationThreshold = 1;
+let OperationList = dynamic(
+["Microsoft.Storage/storageAccounts/regenerateKey/action"]);
+AzureActivity 
+| where TimeGenerated > ago(starttime)
+| where ResourceProvider == "Microsoft.Storage"
+| where OperationNameValue in~ (OperationList)
+| where ActivityStatus == "Succeeded"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+OperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()  
+by CallerIpAddress, Caller, OperationName, Resource
+| where ActivityCountByCallerIPAddress >= alertOperationThreshold
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, HostCustomEntity = Resource
