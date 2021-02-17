@@ -1,0 +1,29 @@
+id: e6a5ee48-104a-4ee7-990f-ea71318cc6cf
+name: Azure Storage SAS Tokens generated
+description: This alerts when new Azure Storage account SAS tokens are generated. 
+severity: Low
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Discovery
+query:
+let starttime = 1d;
+let alertOperationThreshold = 1;
+let OperationList = dynamic(
+["Microsoft.Storage/storageAccounts/listAccountSas/action"]);
+AzureActivity 
+| where TimeGenerated > ago(starttime)
+| where ResourceProvider == "Microsoft.Storage"
+| where OperationNameValue in~ (OperationList)
+| where ActivityStatus == "Succeeded"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+OperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()  
+by CallerIpAddress, Caller, OperationName, Resource
+| where ActivityCountByCallerIPAddress >= alertOperationThreshold
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, HostCustomEntity = Resource
