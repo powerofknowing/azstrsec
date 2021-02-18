@@ -13,14 +13,14 @@ triggerThreshold: 1
 tactics:
   - Impact
 query:
-// It is best to run this query on a lookback period which is at least 7 days.
-let timeframe = 7d;
+// Recommended to run this query with a min. 7 days lookback period.
+let timeframe = 14d;
 let OperationList = dynamic(
 ["Microsoft.Storage/storageAccounts/write"]);
 AzureActivity
 | where TimeGenerated >= ago(timeframe)
 | where OperationNameValue  in (OperationList)
 | where ActivityStatus == "Succeeded" 
-| make-series dcount(ResourceId)  default=0 on EventSubmissionTimestamp in range(ago(7d), now(), 1d) by Caller
+| make-series dcount(ResourceId) default=2 on EventSubmissionTimestamp in range(ago(14d), now(), 1d) by Caller
 | extend AccountCustomEntity = Caller
 | render timechart
