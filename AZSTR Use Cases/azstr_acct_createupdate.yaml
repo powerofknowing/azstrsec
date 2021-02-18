@@ -1,0 +1,31 @@
+id: cebd9037-988d-47c2-b17b-085de0a21d04
+name: Too many storage accounts created or updated
+description: This alerts when too many storage accounts are created or updated within a period of time.
+severity: Medium
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Impact
+query:
+let starttime = 14d;
+let alertOperationThreshold = 2;
+// Storage account created or updated
+let OperationList = dynamic(
+["Microsoft.Storage/storageAccounts/write"]);
+AzureActivity 
+| where TimeGenerated > ago(starttime)
+| where ResourceProvider == "Microsoft.Storage"
+| where OperationNameValue in~ (OperationList)
+| where ActivityStatus == "Succeeded"
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
+OperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()  
+by CallerIpAddress, Caller, OperationName, Resource
+| where ActivityCountByCallerIPAddress >= alertOperationThreshold
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, HostCustomEntity = Resource
+
