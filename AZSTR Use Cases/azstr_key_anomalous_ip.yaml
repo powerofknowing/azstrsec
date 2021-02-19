@@ -11,8 +11,7 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 1
 tactics:
-  - Impact
-  - Defense Evasion
+  - Credential Access
 query:
 // Recommended to run this query with a min. 7 days lookback period.
 let timeframe = 14d;
