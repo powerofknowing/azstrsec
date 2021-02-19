@@ -1,0 +1,39 @@
+id: ad20168b-7bfc-4bc7-af58-6ad83438f01a
+name: Storage account modifications by anomalous IP
+description: This alerts when storage accounts are modified by anomalous IP addresses.
+severity: Medium
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Impact
+  - Defense Evasion
+query:
+// Recommended to run this query with a min. 7 days lookback period.
+let timeframe = 14d;
+// Storage account create, update and delete operations
+let OperationList = dynamic(
+["Microsoft.Storage/storageAccounts/write", "Microsoft.Storage/storageAccounts/delete"]);
+AzureActivity
+| where TimeGenerated >= ago(timeframe)
+| where OperationNameValue in~ (OperationList)
+| where ActivityStatus == "Succeeded" 
+| join kind= inner (
+    AzureActivity
+    | where TimeGenerated >= ago(timeframe)
+    | where OperationNameValue in~ (OperationList)
+    | where ActivityStatus == "Succeeded"
+    | project ExpectedIpAddress=CallerIpAddress, Caller 
+    | evaluate autocluster()
+    )
+    on Caller
+// Only for unexpected IP addresses
+| where CallerIpAddress != ExpectedIpAddress
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationName, Caller, CallerIpAddress
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
