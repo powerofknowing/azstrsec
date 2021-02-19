@@ -1,0 +1,39 @@
+id: 4a903f14-5ed0-4938-bcee-7ceb8d8f0c19
+name: Storage account key operations by anomalous IP
+description: This alerts when storage account key operations are performed by anomalous IP addresses.
+severity: Medium
+requiredDataConnectors:  
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Impact
+  - Defense Evasion
+query:
+// Recommended to run this query with a min. 7 days lookback period.
+let timeframe = 14d;
+// Storage account create, update and delete operations
+let OperationList = dynamic(
+["Microsoft.Storage/storageAccounts/regenerateKey/action", "Microsoft.Storage/storageAccounts/listAccountSas/action"]);
+AzureActivity
+| where TimeGenerated >= ago(timeframe)
+| where OperationNameValue in~ (OperationList)
+| where ActivityStatus == "Succeeded" 
+| join kind= inner (
+    AzureActivity
+    | where TimeGenerated >= ago(timeframe)
+    | where OperationNameValue in~ (OperationList)
+    | where ActivityStatus == "Succeeded"
+    | project ExpectedIpAddress=CallerIpAddress, Caller 
+    | evaluate autocluster()
+    )
+    on Caller
+// Only for unexpected IP addresses
+| where CallerIpAddress != ExpectedIpAddress
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationName, Caller, CallerIpAddress
+| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
